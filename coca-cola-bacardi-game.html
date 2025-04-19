@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Coca-Cola x Bacardí - Colección</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #121212;
+            font-family: 'Arial', sans-serif;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-canvas {
+            display: block;
+            background: linear-gradient(#121212, #541e1b);
+        }
+        #start-screen, #game-over-screen, #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #ffffff;
+            z-index: 10;
+        }
+        #game-over-screen, #win-screen {
+            display: none;
+        }
+        .screen-title {
+            font-size: 10vw;
+            margin-bottom: 5vh;
+            background: linear-gradient(45deg, #d4af37, #ffffff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+        }
+        .screen-text {
+            font-size: 5vw;
+            margin-bottom: 5vh;
+            color: #ffffff;
+            text-align: center;
+            padding: 0 10%;
+        }
+        .btn {
+            padding: 15px 30px;
+            font-size: 6vw;
+            background: linear-gradient(45deg, #d4af37, #8B4513);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #ffffff;
+            font-size: 5vw;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #coupon {
+            margin-top: 20px;
+            padding: 15px;
+            background: linear-gradient(45deg, #d4af37, #8B4513);
+            border-radius: 10px;
+            color: white;
+            font-size: 5vw;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+        }
+        .title-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="hud">
+            <div id="lives">Vidas: 3</div>
+            <div id="score">Latas: 0/100</div>
+        </div>
+        <div id="start-screen">
+            <h1 class="screen-title">Colección</h1>
+            <p class="screen-text">Ayuda al murciélago de Bacardí a recolectar 100 latas para ganar un descuento del 50% en tu próximo FourPack</p>
+            <button class="btn" id="start-btn">JUGAR</button>
+        </div>
+        <div id="game-over-screen">
+            <h1 class="screen-title">¡GAME OVER!</h1>
+            <p class="screen-text">Has perdido todas tus vidas. ¡Inténtalo de nuevo!</p>
+            <button class="btn" id="retry-btn">REINTENTAR</button>
+        </div>
+        <div id="win-screen">
+            <h1 class="screen-title">¡FELICIDADES!</h1>
+            <p class="screen-text">Has recolectado 100 latas y ganado un descuento del 50% en tu próximo FourPack</p>
+            <div id="coupon"></div>
+            <p class="screen-text" style="font-size: 3vw;">Este código es único, intransferible y tiene una vigencia de 24 horas</p>
+            <button class="btn" id="play-again-btn">JUGAR DE NUEVO</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuración del juego
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const winScreen = document.getElementById('win-screen');
+        const startBtn = document.getElementById('start-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const livesDisplay = document.getElementById('lives');
+        const scoreDisplay = document.getElementById('score');
+        const couponDisplay = document.getElementById('coupon');
+
+        // Configurar tamaño del canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Variables del juego
+        let gameRunning = false;
+        let lives = 3;
+        let score = 0;
+        let gameSpeed = 3;
+
+        // Paleta de colores
+        const colors = {
+            gold: '#D4AF37',
+            white: '#FFFFFF',
+            brown: '#8B4513',
+            black: '#121212',
+            red: '#FF0000'
+        };
+
+        // Clase Jugador (Murciélago de Bacardí)
+        class Bat {
+            constructor() {
+                this.size = canvas.height / 10;
+                this.x = canvas.width / 4;
+                this.y = canvas.height / 2;
+                this.velocityY = 0;
+                this.gravity = 0.5;
+                this.wingAngle = 0;
+                this.wingDirection = 1;
+            }
+
+            update() {
+                // Aplicar gravedad
+                this.velocityY += this.gravity;
+                this.y += this.velocityY;
+
+                // Limitar posición vertical
+                if (this.y + this.size > canvas.height) {
+                    this.y = canvas.height - this.size;
+                    this.velocityY = 0;
+                }
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.velocityY = 0;
+                }
+                
+                // Animación de alas
+                this.wingAngle += 0.1 * this.wingDirection;
+                if (this.wingAngle > 0.5 || this.wingAngle < -0.2) {
+                    this.wingDirection *= -1;
+                }
+            }
+
+            draw() {
+                // Dibujar el murciélago de Bacardí más detallado
+                
+                // Alas
+                ctx.fillStyle = colors.black;
+                
+                // Ala izquierda
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.size/2, this.y + this.size/3);
+                ctx.quadraticCurveTo(
+                    this.x - this.size/3, 
+                    this.y - this.size/3 + (this.wingAngle * this.size/2), 
+                    this.x - this.size/1.5, 
+                    this.y + this.size/2 + (this.wingAngle * this.size/2)
+                );
+                ctx.quadraticCurveTo(
+                    this.x - this.size/4, 
+                    this.y + this.size/1.5, 
+                    this.x + this.size/2, 
+                    this.y + this.size/2
+                );
+                ctx.fill();
+                
+                // Ala derecha
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.size/2, this.y + this.size/3);
+                ctx.quadraticCurveTo(
+                    this.x + this.size + this.size/3, 
+                    this.y - this.size/3 + (this.wingAngle * this.size/2), 
+                    this.x + this.size*1.5, 
+                    this.y + this.size/2 + (this.wingAngle * this.size/2)
+                );
+                ctx.quadraticCurveTo(
+                    this.x + this.size + this.size/4, 
+                    this.y + this.size/1.5, 
+                    this.x + this.size/2, 
+                    this.y + this.size/2
+                );
+                ctx.fill();
+                
+                // Cuerpo
+                ctx.beginPath();
+                ctx.ellipse(this.x + this.size/2, this.y + this.size/2, this.size/3, this.size/2.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Cabeza
+                ctx.beginPath();
+                ctx.ellipse(this.x + this.size/2, this.y + this.size/4, this.size/4, this.size/5, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Orejas
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.size/2 - this.size/6, this.y + this.size/6);
+                ctx.lineTo(this.x + this.size/2 - this.size/3, this.y - this.size/6);
+                ctx.lineTo(this.x + this.size/2, this.y + this.size/6);
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.size/2 + this.size/6, this.y + this.size/6);
+                ctx.lineTo(this.x + this.size/2 + this.size/3, this.y - this.size/6);
+                ctx.lineTo(this.x + this.size/2, this.y + this.size/6);
+                ctx.fill();
+                
+                // Ojos
+                ctx.fillStyle = colors.gold;
+                ctx.beginPath();
+                ctx.arc(this.x + this.size/2 - this.size/8, this.y + this.size/4, this.size/15, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.arc(this.x + this.size/2 + this.size/8, this.y + this.size/4, this.size/15, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Nariz
+                ctx.fillStyle = colors.gold;
+                ctx.beginPath();
+                ctx.arc(this.x + this.size/2, this.y + this.size/3, this.size/20, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Patas
+                ctx.fillStyle = colors.black;
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.size/2 - this.size/10, this.y + this.size);
+                ctx.lineTo(this.x + this.size/2 - this.size/5, this.y + this.size/1.1);
+                ctx.lineTo(this.x + this.size/2, this.y + this.size);
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.size/2 + this.size/10, this.y + this.size);
+                ctx.lineTo(this.x + this.size/2 + this.size/5, this.y + this.size/1.1);
+                ctx.lineTo(this.x + this.size/2, this.y + this.size);
+                ctx.fill();
+            }
+
+            flap() {
+                this.velocityY = -10;
+                this.wingDirection = -1;
+                this.wingAngle = 0;
+            }
+
+            checkCollision(obstacle) {
+                return (
+                    this.x < obstacle.x + obstacle.width &&
+                    this.x + this.size > obstacle.x &&
+                    this.y < obstacle.y + obstacle.height &&
+                    this.y + this.size > obstacle.y
+                );
+            }
+        }
+
+        // Clase Obstáculo
+        class Obstacle {
+            constructor() {
+                this.width = canvas.width / 15;
+                this.minHeight = canvas.height / 10;
+                this.maxHeight = canvas.height / 2;
+                this.height = Math.random() * (this.maxHeight - this.minHeight) + this.minHeight;
+                this.x = canvas.width;
+                
+                // Posición aleatoria: arriba o abajo
+                this.position = Math.random() > 0.5 ? 'top' : 'bottom';
+                this.y = this.position === 'top' ? 0 : canvas.height - this.height;
+                
+                // Estilo del obstáculo
+                this.color = Math.random() > 0.5 ? colors.brown : colors.red;
+            }
+
+            update() {
+                this.x -= gameSpeed;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Detalles decorativos
+                ctx.fillStyle = colors.gold;
+                ctx.fillRect(this.x, this.position === 'top' ? this.height - 10 : this.y, this.width, 10);
+                
+                // Patrón de líneas
+                ctx.strokeStyle = colors.white;
+                ctx.lineWidth = 2;
+                for (let i = 1; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y + (this.height / 3) * i);
+                    ctx.lineTo(this.x + this.width, this.y + (this.height / 3) * i);
+                    ctx.stroke();
+                }
+            }
+
+            isOffScreen() {
+                return this.x + this.width < 0;
+            }
+        }
+
+        // Clase Lata
+        class Can {
+            constructor() {
+                this.size = canvas.height / 15;
+                this.x = canvas.width;
+                this.y = Math.random() * (canvas.height - this.size * 2) + this.size;
+                this.type = Math.random() > 0.5 ? 'coca' : 'bacardi';
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+            }
+
+            update() {
+                this.x -= gameSpeed;
+                this.rotation += this.rotationSpeed;
+            }
+
+            draw() {
+                // Guardar el contexto actual
+                ctx.save();
+                
+                // Trasladar y rotar
+                ctx.translate(this.x + this.size/2, this.y + this.size * 0.75);
+                ctx.rotate(this.rotation);
+                
+                // Dibujar lata
+                ctx.fillStyle = this.type === 'coca' ? colors.red : colors.gold;
+                ctx.fillRect(-this.size/2, -this.size * 0.75, this.size, this.size * 1.5);
+                
+                // Detalles de la lata
+                ctx.fillStyle = colors.white;
+                ctx.fillRect(-this.size/2, -this.size * 0.45, this.size, this.size * 0.3);
+                
+                // Borde superior e inferior
+                ctx.fillStyle = colors.gold;
+                ctx.fillRect(-this.size/2, -this.size * 0.75, this.size, this.size * 0.1);
+                ctx.fillRect(-this.size/2, this.size * 0.65, this.size, this.size * 0.1);
+                
+                // Restaurar contexto
+                ctx.restore();
+            }
+
+            isCollected(bat) {
+                return (
+                    bat.x < this.x + this.size &&
+                    bat.x + bat.size > this.x &&
+                    bat.y < this.y + this.size * 1.5 &&
+                    bat.y + bat.size > this.y
+                );
+            }
+
+            isOffScreen() {
+                return this.x + this.size < 0;
+            }
+        }
+
+        // Arreglos de objetos del juego
+        let bat;
+        let obstacles = [];
+        let cans = [];
+        let lastObstacleTime = 0;
+        let lastCanTime = 0;
+
+        // Inicializar objetos del juego
+        function initGame() {
+            bat = new Bat();
+            obstacles = [];
+            cans = [];
+            lives = 3;
+            score = 0;
+            gameSpeed = 3;
+            lastObstacleTime = 0;
+            lastCanTime = 0;
+            updateUI();
+        }
+
+        // Actualizar UI
+        function updateUI() {
+            livesDisplay.textContent = `Vidas: ${lives}`;
+            scoreDisplay.textContent = `Latas: ${score}/100`;
+        }
+
+        // Generar código de cupón
+        function generateCoupon() {
+            const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = 'COLABACK';
+            for (let i = 0; i < 8; i++) {
+                code += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return code;
+        }
+
+        // Efecto de brillo dorado
+        function drawGoldenParticles() {
+            ctx.fillStyle = colors.gold;
+            for (let i = 0; i < 50; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const size = Math.random() * 2 + 1;
+                const alpha = Math.random() * 0.5 + 0.2;
+                
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Bucle principal del juego
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            if (!gameRunning) return;
+            
+            // Limpiar canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Dibujar fondo con efecto parallax
+            drawBackground();
+            
+            // Crear nuevos obstáculos
+            if (timestamp - lastObstacleTime > 2000) { // Cada 2 segundos
+                obstacles.push(new Obstacle());
+                lastObstacleTime = timestamp;
+            }
+            
+            // Crear nuevas latas
+            if (timestamp - lastCanTime > 1000) { // Cada 1 segundo
+                cans.push(new Can());
+                lastCanTime = timestamp;
+            }
+            
+            // Actualizar y dibujar obstáculos
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].update();
+                obstacles[i].draw();
+                
+                // Revisar colisiones
+                if (bat.checkCollision(obstacles[i])) {
+                    lives--;
+                    updateUI();
+                    obstacles.splice(i, 1);
+                    
+                    if (lives <= 0) {
+                        gameOver();
+                        return;
+                    }
+                    continue;
+                }
+                
+                // Eliminar obstáculos fuera de pantalla
+                if (obstacles[i].isOffScreen()) {
+                    obstacles.splice(i, 1);
+                }
+            }
+            
+            // Actualizar y dibujar latas
+            for (let i = cans.length - 1; i >= 0; i--) {
+                cans[i].update();
+                cans[i].draw();
+                
+                // Revisar si fue recolectada
+                if (cans[i].isCollected(bat)) {
+                    score++;
+                    updateUI();
+                    cans.splice(i, 1);
+                    
+                    // Aumentar velocidad cada 10 latas
+                    if (score % 10 === 0) {
+                        gameSpeed += 0.5;
+                    }
+                    
+                    if (score >= 100) {
+                        winGame();
+                        return;
+                    }
+                    continue;
+                }
+                
+                // Eliminar latas fuera de pantalla
+                if (cans[i].isOffScreen()) {
+                    cans.splice(i, 1);
+                }
+            }
+            
+            // Actualizar y dibujar murciélago
+            bat.update();
+            bat.draw();
+            
+            // Efecto de partículas doradas
+            drawGoldenParticles();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Dibujar fondo
+        function drawBackground() {
+            // Crear degradado de fondo
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, colors.black);
+            gradient.addColorStop(1, '#541e1b'); // Un tono rojizo oscuro
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Pequeñas estrellas/destellos dorados
+            ctx.fillStyle = colors.gold;
+            for (let i = 0; i < 30; i++) {
+                const x = Math.sin(Date.now() * 0.001 + i) * canvas.width + canvas.width / 2;
+                const y = Math.cos(Date.now() * 0.001 + i * 0.5) * canvas.height / 2 + canvas.height / 2;
+                const size = Math.sin(Date.now() * 0.002 + i) * 2 + 3;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Iniciar juego
+        function startGame() {
+            initGame();
+            gameRunning = true;
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            winScreen.style.display = 'none';
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Game Over
+        function gameOver() {
+            gameRunning = false;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        // Ganar juego
+        function winGame() {
+            gameRunning = false;
+            const couponCode = generateCoupon();
+            couponDisplay.textContent = couponCode;
+            winScreen.style.display = 'flex';
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', startGame);
+        retryBtn.addEventListener('click', startGame);
+        playAgainBtn.addEventListener('click', startGame);
+
+        // Control de toque para móviles
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            if (gameRunning) {
+                bat.flap();
+            }
+        });
+
+        // Control de click para PC
+        canvas.addEventListener('click', function() {
+            if (gameRunning) {
+                bat.flap();
+            }
+        });
+
+        // Control de teclado
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space' && gameRunning) {
+                e.preventDefault();
+                bat.flap();
+            }
+        });
+
+        // Mostrar pantalla inicial
+        resizeCanvas();
+    </script>
+</body>
+</html>
